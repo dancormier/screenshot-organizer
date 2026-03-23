@@ -31,20 +31,15 @@ cd screenshot-organizer
 On first run, you'll be prompted for:
 
 - **Watch directory** — defaults to your macOS screenshot location
-- **Keep count** — how many recent files to keep before archiving (default: 20)
-- **Settle delay** — seconds to wait before processing, to ensure the file is fully written (default: 0.5)
+- **Rename** — whether to rename files to `YYYYMMDD-HHMMSS` format
+- **Archive** — whether to auto-archive old files, and how many to keep (default: 20)
+- **Screenshot thumbnail** — option to disable the macOS thumbnail preview for faster processing
 
 Config is saved to `~/.config/screenshot-organizer/config`. The script runs automatically on login via a LaunchAgent.
 
 ## Usage
 
 Once installed, it runs in the background. Take a screenshot and it's on your clipboard and renamed within about a second.
-
-**Tip:** Disable the macOS floating thumbnail for instant processing:
-
-```sh
-defaults write com.apple.screencapture show-thumbnail -bool false
-```
 
 ### Management
 
