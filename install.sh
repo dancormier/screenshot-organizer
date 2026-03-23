@@ -1,6 +1,7 @@
 #!/bin/zsh
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION="$(cat "$SCRIPT_DIR/VERSION")"
 CONFIG_DIR="$HOME/.config/screenshot-organizer"
 CONFIG_FILE="$CONFIG_DIR/config"
 PLIST_NAME="com.screenshot-organizer.plist"
@@ -18,8 +19,8 @@ fi
 
 # Interactive config setup (first run or reconfigure)
 if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
-    echo "Screenshot Organizer Setup"
-    echo "=========================="
+    echo "Screenshot Organizer v$VERSION Setup"
+    echo "===================================="
     echo ""
 
     # Watch directory
@@ -138,6 +139,6 @@ echo "Symlinked plist to $PLIST_DST"
 # Load agent (bootout first if already loaded, ignore errors)
 launchctl bootout "$SERVICE_TARGET" 2>/dev/null
 launchctl bootstrap "$DOMAIN_TARGET" "$PLIST_DST"
-echo "Agent loaded. Screenshot organizer is running."
+echo "Agent loaded. Screenshot organizer v$VERSION is running."
 echo ""
 echo "Logs: tail -f ~/Library/Logs/screenshot-organizer.log"

@@ -133,6 +133,10 @@ if [[ ! -d "$WATCH_DIR" ]]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")"
+
+log "Screenshot Organizer v$VERSION"
 log "Watching $WATCH_DIR for screenshots..."
 
 fswatch --event Created --event Updated --event Renamed -0 "$WATCH_DIR" | while IFS= read -r -d '' file; do
