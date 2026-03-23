@@ -49,23 +49,48 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
         *) rename_enabled=true ;;
     esac
 
-    # Keep count
-    printf "How many recent images to keep in the root folder? [20]: "
-    read keep_count
-    keep_count="${keep_count:-20}"
+    # Archive
+    printf "Automatically archive old screenshots? [Y/n]: "
+    read archive_enabled
+    case "$archive_enabled" in
+        [nN]*) archive_enabled=false ;;
+        *) archive_enabled=true ;;
+    esac
 
-    # Settle delay
-    printf "Settle delay in seconds before processing (0.5 is usually fine)? [0.5]: "
-    read settle_delay
-    settle_delay="${settle_delay:-0.5}"
+    keep_count=20
+    if [[ "$archive_enabled" == true ]]; then
+        printf "How many recent images to keep before archiving? [20]: "
+        read keep_count
+        keep_count="${keep_count:-20}"
+
+        # Create _archive directory
+        mkdir -p "$watch_dir/_archive"
+    fi
+
+    # Screenshot thumbnail
+    echo ""
+    echo "macOS can show a brief thumbnail preview after taking a screenshot."
+    echo "The file won't be processed until the preview dismisses."
+    printf "Screenshot thumbnail duration in seconds (0 to disable)? [1]: "
+    read thumbnail_duration
+    thumbnail_duration="${thumbnail_duration:-1}"
+
+    if [[ "$thumbnail_duration" == "0" ]]; then
+        defaults write com.apple.screencapture show-thumbnail -bool false
+        echo "  Screenshot thumbnail disabled."
+    else
+        defaults write com.apple.screencapture show-thumbnail -bool true
+        echo "  Screenshot thumbnail enabled."
+    fi
 
     # Save config
     mkdir -p "$CONFIG_DIR"
     cat > "$CONFIG_FILE" <<EOF
 WATCH_DIR="$watch_dir"
 RENAME_ENABLED=$rename_enabled
+ARCHIVE_ENABLED=$archive_enabled
 KEEP_COUNT=$keep_count
-SETTLE_DELAY=$settle_delay
+SETTLE_DELAY=0.5
 EOF
 
     echo ""

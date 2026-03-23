@@ -137,6 +137,6 @@ fswatch --event Created --event Updated --event Renamed -0 "$WATCH_DIR" | while 
     [[ "${file:t}" =~ ^[0-9]{8}-[0-9]{6} ]] && continue
     if [[ "${file:t}" == (*"Screen Shot"*|*"Screenshot"*).png || "${file:t}" == *.gif ]]; then
         process_screenshot "$file"
-        archive_old_screenshots
+        [[ "$ARCHIVE_ENABLED" == true ]] && archive_old_screenshots
     fi
 done
