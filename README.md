@@ -23,7 +23,7 @@ Supports macOS screenshot naming (`Screenshot ...` and `Screen Shot ...`) and GI
 ## Install
 
 ```sh
-git clone https://github.com/yourusername/screenshot-organizer.git
+git clone https://github.com/dancormier/screenshot-organizer.git
 cd screenshot-organizer
 ./install.sh
 ```
