@@ -69,19 +69,20 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
 
     # Screenshot thumbnail
     echo ""
-    echo "macOS can show a brief thumbnail preview after taking a screenshot."
-    echo "The file won't be processed until the preview dismisses."
-    printf "Screenshot thumbnail duration in seconds (0 to disable)? [1]: "
-    read thumbnail_duration
-    thumbnail_duration="${thumbnail_duration:-1}"
-
-    if [[ "$thumbnail_duration" == "0" ]]; then
-        defaults write com.apple.screencapture show-thumbnail -bool false
-        echo "  Screenshot thumbnail disabled."
-    else
-        defaults write com.apple.screencapture show-thumbnail -bool true
-        echo "  Screenshot thumbnail enabled."
-    fi
+    echo "macOS shows a thumbnail preview after taking a screenshot."
+    echo "Disabling it saves ~5 seconds as the file is written to disk immediately."
+    printf "Disable screenshot thumbnail preview? [Y/n]: "
+    read disable_thumbnail
+    case "$disable_thumbnail" in
+        [nN]*)
+            defaults write com.apple.screencapture show-thumbnail -bool true
+            echo "  Screenshot thumbnail kept enabled."
+            ;;
+        *)
+            defaults write com.apple.screencapture show-thumbnail -bool false
+            echo "  Screenshot thumbnail disabled."
+            ;;
+    esac
 
     # Save config
     mkdir -p "$CONFIG_DIR"
