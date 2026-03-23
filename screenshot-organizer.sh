@@ -1,5 +1,8 @@
 #!/bin/zsh
 
+# Unmatched globs expand to nothing instead of erroring (needed when no GIFs exist)
+setopt NULL_GLOB
+
 # Ensure Homebrew binaries are in PATH (LaunchAgents have minimal PATH)
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
