@@ -105,7 +105,7 @@ process_screenshot() {
 
 archive_old_screenshots() {
     # List PNGs and GIFs in root of watch dir (not subdirs), sorted newest first
-    local files=("${(@f)$(ls -t "$WATCH_DIR"/*.png "$WATCH_DIR"/*.gif 2>/dev/null)}")
+    local files=("${(@f)$(find "$WATCH_DIR" -maxdepth 1 \( -name '*.png' -o -name '*.gif' \) -exec ls -t {} + 2>/dev/null)}")
     local count=${#files[@]}
 
     if (( count <= KEEP_COUNT )); then
