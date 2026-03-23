@@ -17,6 +17,24 @@ else
     echo "No plist found at $PLIST_DST"
 fi
 
+# Offer to re-enable screenshot thumbnail
+current_thumbnail="$(defaults read com.apple.screencapture show-thumbnail 2>/dev/null)"
+if [[ "$current_thumbnail" == "0" ]]; then
+    echo ""
+    printf "Re-enable macOS screenshot thumbnail preview? [Y/n]: "
+    read -r response
+    case "$response" in
+        [nN]*)
+            echo "  Screenshot thumbnail left disabled."
+            ;;
+        *)
+            defaults write com.apple.screencapture show-thumbnail -bool true
+            echo "  Screenshot thumbnail re-enabled."
+            ;;
+    esac
+fi
+
+echo ""
 echo "Screenshot organizer uninstalled."
 echo ""
 echo "Config preserved at ~/.config/screenshot-organizer/config"

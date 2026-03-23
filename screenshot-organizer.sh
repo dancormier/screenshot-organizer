@@ -13,6 +13,12 @@ fi
 
 source "$CONFIG_FILE"
 
+# Defaults for any missing config values
+KEEP_COUNT="${KEEP_COUNT:-20}"
+ARCHIVE_ENABLED="${ARCHIVE_ENABLED:-true}"
+RENAME_ENABLED="${RENAME_ENABLED:-true}"
+SETTLE_DELAY="${SETTLE_DELAY:-0.5}"
+
 ARCHIVE_DIR="$WATCH_DIR/_archive"
 
 log() {

@@ -60,8 +60,8 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
     keep_count=20
     if [[ "$archive_enabled" == true ]]; then
         printf "How many recent images to keep before archiving? [20]: "
-        read keep_count
-        keep_count="${keep_count:-20}"
+        read -r input
+        keep_count="${input:-20}"
 
         # Create _archive directory
         mkdir -p "$watch_dir/_archive"
