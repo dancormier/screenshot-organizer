@@ -50,6 +50,14 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
         *) rename_enabled=true ;;
     esac
 
+    # Clipboard
+    printf "Copy each screenshot to the clipboard automatically? [Y/n]: "
+    read clipboard_enabled
+    case "$clipboard_enabled" in
+        [nN]*) clipboard_enabled=false ;;
+        *) clipboard_enabled=true ;;
+    esac
+
     # Archive
     printf "Automatically archive old screenshots? [Y/n]: "
     read archive_enabled
@@ -90,6 +98,7 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
     cat > "$CONFIG_FILE" <<EOF
 WATCH_DIR="$watch_dir"
 RENAME_ENABLED=$rename_enabled
+CLIPBOARD_ENABLED=$clipboard_enabled
 ARCHIVE_ENABLED=$archive_enabled
 KEEP_COUNT=$keep_count
 SETTLE_DELAY=0.5
