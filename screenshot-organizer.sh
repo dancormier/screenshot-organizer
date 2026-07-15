@@ -20,6 +20,7 @@ source "$CONFIG_FILE"
 KEEP_COUNT="${KEEP_COUNT:-20}"
 ARCHIVE_ENABLED="${ARCHIVE_ENABLED:-true}"
 RENAME_ENABLED="${RENAME_ENABLED:-true}"
+CLIPBOARD_ENABLED="${CLIPBOARD_ENABLED:-true}"
 SETTLE_DELAY="${SETTLE_DELAY:-0.5}"
 
 ARCHIVE_DIR="$WATCH_DIR/_archive"
@@ -71,36 +72,38 @@ process_screenshot() {
     fi
 
     # Copy image to clipboard
-    local copy_ok=false
-    case "$ext" in
-        png)
-            osascript \
-                -e 'on run argv' \
-                -e '  set the clipboard to (read POSIX file (item 1 of argv) as «class PNGf»)' \
-                -e 'end run' \
-                -- "$file" && copy_ok=true
-            ;;
-        gif)
-            # Copy as file URL (preserves animation when pasting into Slack, Discord, etc.)
-            osascript -l JavaScript \
-                -e 'function run(argv) {
-                    ObjC.import("AppKit");
-                    ObjC.import("Foundation");
-                    var url = $.NSURL.fileURLWithPath(argv[0]);
-                    var pb = $.NSPasteboard.generalPasteboard;
-                    pb.clearContents;
-                    pb.writeObjects($.NSArray.arrayWithObject(url));
-                }' \
-                -- "$file" && copy_ok=true
-            ;;
-        *) log "ERROR: Unsupported format: $ext"; return ;;
-    esac
+    if [[ "$CLIPBOARD_ENABLED" == true ]]; then
+        local copy_ok=false
+        case "$ext" in
+            png)
+                osascript \
+                    -e 'on run argv' \
+                    -e '  set the clipboard to (read POSIX file (item 1 of argv) as «class PNGf»)' \
+                    -e 'end run' \
+                    -- "$file" && copy_ok=true
+                ;;
+            gif)
+                # Copy as file URL (preserves animation when pasting into Slack, Discord, etc.)
+                osascript -l JavaScript \
+                    -e 'function run(argv) {
+                        ObjC.import("AppKit");
+                        ObjC.import("Foundation");
+                        var url = $.NSURL.fileURLWithPath(argv[0]);
+                        var pb = $.NSPasteboard.generalPasteboard;
+                        pb.clearContents;
+                        pb.writeObjects($.NSArray.arrayWithObject(url));
+                    }' \
+                    -- "$file" && copy_ok=true
+                ;;
+            *) log "ERROR: Unsupported format: $ext"; return ;;
+        esac
 
-    if [[ "$copy_ok" != true ]]; then
-        log "ERROR: Failed to copy to clipboard: $file"
-        return
+        if [[ "$copy_ok" != true ]]; then
+            log "ERROR: Failed to copy to clipboard: $file"
+            return
+        fi
+        log "CLIPBOARD: $file"
     fi
-    log "CLIPBOARD: $file"
 }
 
 archive_old_screenshots() {

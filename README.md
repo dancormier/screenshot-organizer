@@ -8,7 +8,7 @@ Uses `fswatch` and macOS's native FSEvents for near-instant file detection inste
 
 When a new screenshot or GIF appears in your watch directory:
 
-1. **Copies it to the clipboard** — PNGs are copied as image data, GIFs are copied as file references (preserving animation)
+1. **Copies it to the clipboard** — PNGs are copied as image data, GIFs are copied as file references (preserving animation). Optional; can be disabled at setup.
 2. **Renames it** to `YYYYMMDD-HHMMSS.png/gif` based on creation date
 3. **Archives old files** — keeps the most recent images in the root folder and moves the rest to `_archive/`
 
@@ -32,6 +32,7 @@ On first run, you'll be prompted for:
 
 - **Watch directory** — defaults to your macOS screenshot location
 - **Rename** — whether to rename files to `YYYYMMDD-HHMMSS` format
+- **Clipboard** — whether to copy each screenshot to the clipboard automatically (on by default)
 - **Archive** — whether to auto-archive old files, and how many to keep (default: 20)
 - **Screenshot thumbnail** — option to disable the macOS thumbnail preview for faster processing
 
