@@ -113,8 +113,13 @@ fi
 
 echo ""
 
-# Generate plist with correct paths
-cat > "$SCRIPT_DIR/$PLIST_NAME" <<EOF
+# Write plist directly to LaunchAgents as a regular file. A symlink into the
+# repo would break silently if the repo is moved (launchd can't load it at the
+# next login), so the plist must live independently of the repo.
+if [[ -L "$PLIST_DST" ]]; then
+    rm "$PLIST_DST"
+fi
+cat > "$PLIST_DST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -137,13 +142,10 @@ cat > "$SCRIPT_DIR/$PLIST_NAME" <<EOF
 </plist>
 EOF
 
-# Symlink plist
-if [[ -L "$PLIST_DST" || -f "$PLIST_DST" ]]; then
-    echo "Plist already exists at $PLIST_DST — updating symlink."
-    rm "$PLIST_DST"
-fi
-ln -s "$SCRIPT_DIR/$PLIST_NAME" "$PLIST_DST"
-echo "Symlinked plist to $PLIST_DST"
+echo "Installed plist to $PLIST_DST"
+
+# Clean up plist generated inside the repo by older versions of this script
+rm -f "$SCRIPT_DIR/$PLIST_NAME"
 
 # Load agent (bootout first if already loaded, ignore errors)
 launchctl bootout "$SERVICE_TARGET" 2>/dev/null
