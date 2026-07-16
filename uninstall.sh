@@ -9,7 +9,7 @@ SERVICE_TARGET="gui/$(id -u)/$LABEL"
 launchctl bootout "$SERVICE_TARGET" 2>/dev/null
 echo "Agent unloaded."
 
-# Remove symlink
+# Remove plist (regular file; older installs used a symlink)
 if [[ -L "$PLIST_DST" || -f "$PLIST_DST" ]]; then
     rm "$PLIST_DST"
     echo "Removed $PLIST_DST"
