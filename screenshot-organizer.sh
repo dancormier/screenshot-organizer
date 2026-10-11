@@ -225,6 +225,13 @@ reset_upload_state() {
     rm -f "$UPLOAD_STATUS"
 }
 
+# A real write, because after the network drops macOS keeps the SMB mount
+# listed and `-d`/`-w` still pass until the mount times out
+upload_dir_writable() {
+    local probe="$UPLOAD_DIR/.write-probe.${HOST%%.*}.$sysparams[pid]"
+    { : > "$probe" } 2>/dev/null && rm -f "$probe"
+}
+
 paths_overlap() {
     [[ "$1" == "$2" || "$1" == "$2"/* || "$2" == "$1"/* ]]
 }
@@ -264,7 +271,7 @@ flush_uploads() {
     {
         # Never create UPLOAD_DIR: when the share is unmounted its path is
         # missing, and creating it would write to the local disk under /Volumes.
-        if [[ ! -d "$UPLOAD_DIR" || ! -w "$UPLOAD_DIR" ]] || ! upload_dir_mounted; then
+        if [[ ! -d "$UPLOAD_DIR" ]] || ! upload_dir_mounted || ! upload_dir_writable; then
             set_upload_status offline
             return 0
         fi
@@ -286,6 +293,11 @@ flush_uploads() {
             if [[ -z "$dest" || "$(file_size "$UPLOAD_DIR/$dest")" != "$local_size" ]] ||
                { $archived && ! cmp -s "$f" "$UPLOAD_DIR/$dest"; }; then
                 if ! dest="$(upload_one "$f")"; then
+                    # Network dropped mid-run: stop instead of timing out on every file
+                    if ! upload_dir_writable; then
+                        set_upload_status offline
+                        break
+                    fi
                     log "ERROR: Failed to upload ${f:t}; will retry"
                     continue
                 fi

@@ -197,6 +197,19 @@ check "fresh lock from a killed run cleared at startup" '[[ -f $ROOT/nas/2026101
 check "first run after startup logs reachability" 'grep -q "available" $ROOT/log'
 teardown
 
+# ---- share drops mid-run: stop after the first failure, log offline once ----
+setup
+print -r "png-n" > "$ROOT/watch/_archive/20261010-233500.png"
+print -r "png-o" > "$ROOT/watch/_archive/20261010-233501.png"
+cp() { chmod a-w "$ROOT/nas"; return 1 }
+run_flush
+unfunction cp
+check "both local files kept" '[[ -f $ROOT/watch/_archive/20261010-233500.png && -f $ROOT/watch/_archive/20261010-233501.png ]]'
+check "stopped after the first failure" '[[ $(grep -c "Failed to upload" $ROOT/log) -eq 0 ]]'
+check "dropped share logged as not reachable" 'grep -q "not reachable" $ROOT/log'
+check "no probe file left behind" '[[ -z "$(ls -A $ROOT/nas)" ]]'
+teardown
+
 # ---- held lock: run skips, nothing deleted ----
 setup
 print -r "png-e" > "$ROOT/watch/_archive/20261005-120000.png"
