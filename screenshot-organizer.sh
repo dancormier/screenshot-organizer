@@ -151,14 +151,31 @@ file_size() {
     stat -f '%z' "$1" 2>/dev/null
 }
 
-# Prints the name the file has in UPLOAD_DIR. Never overwrites: an existing
-# file with different content pushes the upload to name-1, name-2, ...
+# YYYY/MM from the renamed filename, falling back to the file's modified date
+upload_subdir() {
+    local name="${1:t}"
+    if [[ "$name" =~ ^([0-9]{4})([0-9]{2})[0-9]{2}- ]]; then
+        print -r -- "$match[1]/$match[2]"
+    else
+        stat -f '%Sm' -t '%Y/%m' "$1"
+    fi
+}
+
+# Prints the path the file has under UPLOAD_DIR (YYYY/MM/name). Never
+# overwrites: an existing file with different content pushes the upload to
+# name-1, name-2, ...
 upload_one() {
     local src="$1"
     local name="${src:t}"
     local base="${name:r}" ext="${name:e}"
-    local dest_name="$name"
-    local i=0
+    local sub dest_name i=0
+    sub="$(upload_subdir "$src")" || return 1
+    dest_name="$sub/$name"
+
+    # One level at a time, no -p: if the share vanished mid-run, UPLOAD_DIR is
+    # missing and this must fail instead of rebuilding it on the local disk
+    [[ -d "$UPLOAD_DIR/${sub%%/*}" ]] || mkdir "$UPLOAD_DIR/${sub%%/*}" 2>/dev/null
+    [[ -d "$UPLOAD_DIR/$sub" ]] || mkdir "$UPLOAD_DIR/$sub" 2>/dev/null || return 1
 
     while [[ -e "$UPLOAD_DIR/$dest_name" ]]; do
         if cmp -s "$src" "$UPLOAD_DIR/$dest_name"; then
@@ -166,11 +183,11 @@ upload_one() {
             return 0
         fi
         ((i++))
-        dest_name="$base-$i.$ext"
+        dest_name="$sub/$base-$i.$ext"
     done
 
     # Unique per Mac and process, so two uploaders never share a temp file
-    local tmp="$UPLOAD_DIR/.$dest_name.${HOST%%.*}.$sysparams[pid].partial"
+    local tmp="$UPLOAD_DIR/$sub/.${dest_name:t}.${HOST%%.*}.$sysparams[pid].partial"
     if ! cp "$src" "$tmp" 2>/dev/null || ! cmp -s "$src" "$tmp"; then
         rm -f "$tmp" 2>/dev/null
         return 1

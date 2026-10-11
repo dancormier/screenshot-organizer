@@ -17,7 +17,7 @@ When a new screenshot or GIF appears in your watch directory:
 
 Set an upload folder at setup (for example `/Volumes/common/Screenshots/personal`; give each Mac its own folder so you can tell where a screenshot came from). Screenshots always save locally first, so taking one never depends on the network:
 
-- Each renamed screenshot is copied to the upload folder and checked byte for byte before it counts as uploaded.
+- Each renamed screenshot is copied into a `YYYY/MM` folder inside the upload folder (from its name, `20261011-…` → `2026/10/`) and checked byte for byte before it counts as uploaded.
 - Recent screenshots stay in the watch directory. Older ones in `_archive/` are deleted locally only after their upload is verified, so the NAS holds the full history.
 - Nothing on the NAS is ever overwritten or deleted. If a file with the same name but different content exists (say, from another Mac), the upload is saved as `name-1.png`.
 - When the folder isn't reachable (away from home, share unmounted), screenshots wait locally. The script retries every 5 minutes and after every new screenshot, and the log notes when the folder goes away and comes back.

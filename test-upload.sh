@@ -45,9 +45,9 @@ run_flush() {
 setup
 print -r "png-a" > "$ROOT/watch/20261010-120000.png"
 run_flush
-check "recent file copied to NAS" '[[ "$(<$ROOT/nas/20261010-120000.png)" == png-a ]]'
+check "recent file copied to NAS" '[[ "$(<$ROOT/nas/2026/10/20261010-120000.png)" == png-a ]]'
 check "recent file kept locally" '[[ -f $ROOT/watch/20261010-120000.png ]]'
-check "no partial file left" '[[ -z "$(ls -A $ROOT/nas | grep partial)" ]]'
+check "no partial file left" '[[ -z "$(find $ROOT/nas -name "*partial*")" ]]'
 check "upload recorded" 'grep -q "^20261010-120000.png" $ROOT/state/uploaded'
 teardown
 
@@ -55,7 +55,7 @@ teardown
 setup
 print -r "png-b" > "$ROOT/watch/_archive/20261001-090000.png"
 run_flush
-check "archived file on NAS" '[[ "$(<$ROOT/nas/20261001-090000.png)" == png-b ]]'
+check "archived file on NAS" '[[ "$(<$ROOT/nas/2026/10/20261001-090000.png)" == png-b ]]'
 check "archived file removed locally" '[[ ! -e $ROOT/watch/_archive/20261001-090000.png ]]'
 teardown
 
@@ -69,36 +69,36 @@ check "local archive file kept while offline" '[[ -f $ROOT/watch/_archive/202610
 check "offline logged" 'grep -q "not reachable" $ROOT/log'
 mkdir "$ROOT/nas"
 run_flush
-check "uploaded after NAS returns" '[[ -f $ROOT/nas/20261001-090001.png ]]'
+check "uploaded after NAS returns" '[[ -f $ROOT/nas/2026/10/20261001-090001.png ]]'
 check "local removed after NAS returns" '[[ ! -e $ROOT/watch/_archive/20261001-090001.png ]]'
 teardown
 
 # ---- identical file already on NAS: no duplicate ----
 setup
 print -r "same" > "$ROOT/watch/_archive/20261002-100000.png"
-print -r "same" > "$ROOT/nas/20261002-100000.png"
+mkdir -p "$ROOT/nas/2026/10"; print -r "same" > "$ROOT/nas/2026/10/20261002-100000.png"
 run_flush
-check "no duplicate for identical file" '[[ $(ls $ROOT/nas | wc -l) -eq 1 ]]'
+check "no duplicate for identical file" '[[ $(find $ROOT/nas -type f | wc -l) -eq 1 ]]'
 check "local removed when NAS already has it" '[[ ! -e $ROOT/watch/_archive/20261002-100000.png ]]'
 teardown
 
 # ---- same name, different content (other Mac): never overwrite ----
 setup
 print -r "mine" > "$ROOT/watch/_archive/20261003-110000.png"
-print -r "theirs" > "$ROOT/nas/20261003-110000.png"
+mkdir -p "$ROOT/nas/2026/10"; print -r "theirs" > "$ROOT/nas/2026/10/20261003-110000.png"
 run_flush
-check "existing NAS file untouched" '[[ "$(<$ROOT/nas/20261003-110000.png)" == theirs ]]'
-check "upload saved under -1 name" '[[ "$(<$ROOT/nas/20261003-110000-1.png)" == mine ]]'
+check "existing NAS file untouched" '[[ "$(<$ROOT/nas/2026/10/20261003-110000.png)" == theirs ]]'
+check "upload saved under -1 name" '[[ "$(<$ROOT/nas/2026/10/20261003-110000-1.png)" == mine ]]'
 check "local removed after suffixed upload" '[[ ! -e $ROOT/watch/_archive/20261003-110000.png ]]'
 teardown
 
 # ---- recent file uploaded under -1 is not re-uploaded on the next run ----
 setup
 print -r "mine" > "$ROOT/watch/20261003-110001.png"
-print -r "theirs" > "$ROOT/nas/20261003-110001.png"
+mkdir -p "$ROOT/nas/2026/10"; print -r "theirs" > "$ROOT/nas/2026/10/20261003-110001.png"
 run_flush
 run_flush
-check "second run adds no -2 copy" '[[ ! -e $ROOT/nas/20261003-110001-2.png ]]'
+check "second run adds no -2 copy" '[[ ! -e $ROOT/nas/2026/10/20261003-110001-2.png ]]'
 check "second run logs no upload" '! grep -q UPLOAD: $ROOT/log'
 teardown
 
@@ -107,7 +107,7 @@ setup
 print -r "raw" > "$ROOT/watch/Screenshot 2026-10-10 at 9.00.00 PM.png"
 print -r "tmp" > "$ROOT/watch/.20261010-130000.png"
 run_flush
-check "unrenamed screenshot not uploaded" '[[ -z "$(ls -A $ROOT/nas)" ]]'
+check "unrenamed screenshot not uploaded" '[[ -z "$(find $ROOT/nas -type f)" ]]'
 teardown
 
 # ---- read-only share counts as offline: local file kept, retried later ----
@@ -119,7 +119,7 @@ check "local kept when NAS is read-only" '[[ -f $ROOT/watch/_archive/20261004-12
 check "read-only share logged as not reachable" 'grep -q "not reachable" $ROOT/log'
 chmod u+w "$ROOT/nas"
 run_flush
-check "uploaded once writable again" '[[ -f $ROOT/nas/20261004-120000.png ]]'
+check "uploaded once writable again" '[[ -f $ROOT/nas/2026/10/20261004-120000.png ]]'
 teardown
 
 # ---- copy fails on a writable NAS: local file kept ----
@@ -129,7 +129,7 @@ cp() { return 1 }
 run_flush
 unfunction cp
 check "local kept when the copy fails" '[[ -f $ROOT/watch/_archive/20261008-120000.png ]]'
-check "nothing left on NAS after failed copy" '[[ -z "$(ls -A $ROOT/nas)" ]]'
+check "nothing left on NAS after failed copy" '[[ -z "$(find $ROOT/nas -type f)" ]]'
 check "failed copy logged" 'grep -q "Failed to upload" $ROOT/log'
 teardown
 
@@ -140,19 +140,19 @@ cp() { command cp "$@" && print -r "garbage" >> "${@[-1]}" }
 run_flush
 unfunction cp
 check "local kept when the copy is corrupted" '[[ -f $ROOT/watch/_archive/20261008-120001.png ]]'
-check "corrupted copy not published" '[[ -z "$(ls -A $ROOT/nas)" ]]'
+check "corrupted copy not published" '[[ -z "$(find $ROOT/nas -type f)" ]]'
 run_flush
-check "clean retry uploads it" '[[ "$(<$ROOT/nas/20261008-120001.png)" == png-i ]]'
+check "clean retry uploads it" '[[ "$(<$ROOT/nas/2026/10/20261008-120001.png)" == png-i ]]'
 teardown
 
 # ---- recorded upload replaced by same-size different content: never delete ----
 setup
 print -r "mine" > "$ROOT/watch/_archive/20261009-120000.png"
-print -r "evil" > "$ROOT/nas/20261009-120000.png"
+mkdir -p "$ROOT/nas/2026/10"; print -r "evil" > "$ROOT/nas/2026/10/20261009-120000.png"
 print -r "20261009-120000.png${TAB}20261009-120000.png" > "$ROOT/state/uploaded"
 run_flush
-check "share copy with other content left untouched" '[[ "$(<$ROOT/nas/20261009-120000.png)" == evil ]]'
-check "own content re-uploaded under -1" '[[ "$(<$ROOT/nas/20261009-120000-1.png)" == mine ]]'
+check "share copy with other content left untouched" '[[ "$(<$ROOT/nas/2026/10/20261009-120000.png)" == evil ]]'
+check "own content re-uploaded under -1" '[[ "$(<$ROOT/nas/2026/10/20261009-120000-1.png)" == mine ]]'
 check "local removed only after its own content is on the share" '[[ ! -e $ROOT/watch/_archive/20261009-120000.png ]]'
 teardown
 
@@ -182,7 +182,7 @@ ln -s "$ROOT/nas/_archive" "$ROOT/watch/_archive"
 print -r "png-l" > "$ROOT/nas/_archive/20261009-150000.png"
 run_flush
 check "archive file on the share left in place" '[[ -f $ROOT/nas/_archive/20261009-150000.png ]]'
-check "nothing copied to the share root" '[[ ! -e $ROOT/nas/20261009-150000.png ]]'
+check "nothing copied to the share root" '[[ ! -e $ROOT/nas/2026/10/20261009-150000.png ]]'
 check "overlap logged" 'grep -q "overlaps" $ROOT/log'
 teardown
 
@@ -193,7 +193,7 @@ mkdir "$ROOT/state/upload.lock"
 print -r "online" > "$ROOT/state/upload-status"
 reset_upload_state
 run_flush
-check "fresh lock from a killed run cleared at startup" '[[ -f $ROOT/nas/20261010-230840.png && ! -e $ROOT/state/upload.lock ]]'
+check "fresh lock from a killed run cleared at startup" '[[ -f $ROOT/nas/2026/10/20261010-230840.png && ! -e $ROOT/state/upload.lock ]]'
 check "first run after startup logs reachability" 'grep -q "available" $ROOT/log'
 teardown
 
@@ -207,7 +207,35 @@ unfunction cp
 check "both local files kept" '[[ -f $ROOT/watch/_archive/20261010-233500.png && -f $ROOT/watch/_archive/20261010-233501.png ]]'
 check "stopped after the first failure" '[[ $(grep -c "Failed to upload" $ROOT/log) -eq 0 ]]'
 check "dropped share logged as not reachable" 'grep -q "not reachable" $ROOT/log'
-check "no probe file left behind" '[[ -z "$(ls -A $ROOT/nas)" ]]'
+check "no probe file left behind" '[[ -z "$(find $ROOT/nas -type f)" ]]'
+teardown
+
+# ---- year/month folder comes from the filename ----
+setup
+print -r "png-p" > "$ROOT/watch/20250315-080000.png"
+run_flush
+check "filed under 2025/03" '[[ "$(<$ROOT/nas/2025/03/20250315-080000.png)" == png-p ]]'
+check "recorded with its folder" 'grep -q "^20250315-080000.png${TAB}2025/03/20250315-080000.png$" $ROOT/state/uploaded'
+teardown
+
+# ---- share vanishes after the probe: nothing rebuilt locally, nothing deleted ----
+setup
+print -r "png-r" > "$ROOT/watch/_archive/20261011-090000.png"
+functions[real_upload_dir_writable]=$functions[upload_dir_writable]
+upload_dir_writable() { [[ -e "$ROOT/gone" ]] || { touch "$ROOT/gone"; rmdir "$ROOT/nas" } ; return 0 }
+run_flush
+functions[upload_dir_writable]=$functions[real_upload_dir_writable]
+check "upload dir not rebuilt on the local disk" '[[ ! -e $ROOT/nas ]]'
+check "archive file kept when the share vanished" '[[ -f $ROOT/watch/_archive/20261011-090000.png ]]'
+teardown
+
+# ---- renaming off: year/month comes from the modified date ----
+setup
+RENAME_ENABLED=false
+print -r "png-q" > "$ROOT/watch/Screenshot 1.png"
+touch -t 202402291200 "$ROOT/watch/Screenshot 1.png"
+run_flush
+check "undated name filed by modified date" '[[ -f "$ROOT/nas/2024/02/Screenshot 1.png" ]]'
 teardown
 
 # ---- held lock: run skips, nothing deleted ----
@@ -215,7 +243,7 @@ setup
 print -r "png-e" > "$ROOT/watch/_archive/20261005-120000.png"
 mkdir "$ROOT/state/upload.lock"
 run_flush
-check "skips while another upload runs" '[[ -f $ROOT/watch/_archive/20261005-120000.png && -z "$(ls -A $ROOT/nas)" ]]'
+check "skips while another upload runs" '[[ -f $ROOT/watch/_archive/20261005-120000.png && -z "$(find $ROOT/nas -type f)" ]]'
 teardown
 
 # ---- stale lock (>60 min) is cleared ----
@@ -224,7 +252,7 @@ print -r "png-f" > "$ROOT/watch/_archive/20261006-120000.png"
 mkdir "$ROOT/state/upload.lock"
 touch -t "$(date -v-2H +%Y%m%d%H%M)" "$ROOT/state/upload.lock"
 run_flush
-check "stale lock cleared and upload done" '[[ -f $ROOT/nas/20261006-120000.png && ! -e $ROOT/state/upload.lock ]]'
+check "stale lock cleared and upload done" '[[ -f $ROOT/nas/2026/10/20261006-120000.png && ! -e $ROOT/state/upload.lock ]]'
 teardown
 
 # ---- uploads disabled: nothing happens ----
@@ -232,7 +260,7 @@ setup
 UPLOAD_DIR=""
 print -r "png-g" > "$ROOT/watch/_archive/20261007-120000.png"
 run_flush
-check "no upload when UPLOAD_DIR is empty" '[[ -f $ROOT/watch/_archive/20261007-120000.png && -z "$(ls -A $ROOT/nas)" ]]'
+check "no upload when UPLOAD_DIR is empty" '[[ -f $ROOT/watch/_archive/20261007-120000.png && -z "$(find $ROOT/nas -type f)" ]]'
 teardown
 
 echo ""
