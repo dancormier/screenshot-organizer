@@ -202,6 +202,7 @@ set_upload_status() {
     case "$1" in
         offline) log "UPLOAD: $UPLOAD_DIR not reachable (unmounted, or /bin/zsh lacks Full Disk Access); screenshots stay local" ;;
         online) log "UPLOAD: $UPLOAD_DIR available" ;;
+        overlap) log "ERROR: $UPLOAD_DIR overlaps $WATCH_DIR or $ARCHIVE_DIR (check for symlinks); uploads paused" ;;
     esac
 }
 
@@ -214,6 +215,17 @@ upload_dir_mounted() {
     root_dev="$(stat -f '%d' "$mount_root" 2>/dev/null)" || return 1
     volumes_dev="$(stat -f '%d' /Volumes 2>/dev/null)" || return 1
     [[ "$root_dev" != "$volumes_dev" ]]
+}
+
+paths_overlap() {
+    [[ "$1" == "$2" || "$1" == "$2"/* || "$2" == "$1"/* ]]
+}
+
+# A symlinked _archive pointing into UPLOAD_DIR would turn "upload, then delete
+# the local copy" into moving files around on the share itself
+upload_dir_overlaps_local() {
+    local upload_real="${UPLOAD_DIR:A}"
+    paths_overlap "${WATCH_DIR:A}" "$upload_real" || paths_overlap "${ARCHIVE_DIR:A}" "$upload_real"
 }
 
 record_upload() {
@@ -246,6 +258,10 @@ flush_uploads() {
         # missing, and creating it would write to the local disk under /Volumes.
         if [[ ! -d "$UPLOAD_DIR" || ! -w "$UPLOAD_DIR" ]] || ! upload_dir_mounted; then
             set_upload_status offline
+            return 0
+        fi
+        if upload_dir_overlaps_local; then
+            set_upload_status overlap
             return 0
         fi
         set_upload_status online

@@ -174,6 +174,18 @@ unfunction cp
 check "foreign lock left in place" '[[ "$(<$ROOT/state/upload.lock/owner)" == otherhost.1 ]]'
 teardown
 
+# ---- _archive symlinked into the upload folder: refuse, touch nothing ----
+setup
+rmdir "$ROOT/watch/_archive"
+mkdir "$ROOT/nas/_archive"
+ln -s "$ROOT/nas/_archive" "$ROOT/watch/_archive"
+print -r "png-l" > "$ROOT/nas/_archive/20261009-150000.png"
+run_flush
+check "archive file on the share left in place" '[[ -f $ROOT/nas/_archive/20261009-150000.png ]]'
+check "nothing copied to the share root" '[[ ! -e $ROOT/nas/20261009-150000.png ]]'
+check "overlap logged" 'grep -q "overlaps" $ROOT/log'
+teardown
+
 # ---- held lock: run skips, nothing deleted ----
 setup
 print -r "png-e" > "$ROOT/watch/_archive/20261005-120000.png"
