@@ -11,6 +11,20 @@ When a new screenshot or GIF appears in your watch directory:
 1. **Copies it to the clipboard** — PNGs are copied as image data, GIFs are copied as file references (preserving animation). Optional; can be disabled at setup.
 2. **Renames it** to `YYYYMMDD-HHMMSS.png/gif` based on creation date
 3. **Archives old files** — keeps the most recent images in the root folder and moves the rest to `_archive/`
+4. **Uploads to a NAS** (optional) — copies every screenshot to a network folder, verifying each copy byte for byte
+
+## Uploading to a NAS
+
+Set an upload folder at setup (for example `/Volumes/common/Screenshots/_archive`). Screenshots always save locally first, so taking one never depends on the network:
+
+- Each renamed screenshot is copied to the upload folder and checked byte for byte before it counts as uploaded.
+- Recent screenshots stay in the watch directory. Older ones in `_archive/` are deleted locally only after their upload is verified, so the NAS holds the full history.
+- Nothing on the NAS is ever overwritten or deleted. If a file with the same name but different content exists (say, from another Mac), the upload is saved as `name-1.png`.
+- When the folder isn't reachable (away from home, share unmounted), screenshots wait locally. The script retries every 5 minutes and after every new screenshot, and the log notes when the folder goes away and comes back.
+
+**One required permission:** macOS silently blocks background jobs from network volumes. Grant Full Disk Access to `/bin/zsh` (System Settings → Privacy & Security → Full Disk Access → +, then ⇧⌘G and `/bin/zsh`). The LaunchAgent runs the script through `/bin/zsh` so that this grant applies. Without it the log shows the upload folder as not reachable.
+
+Saving screenshots *directly* to a network folder fails on current macOS ("Your screenshot can't be saved"): the screenshot is written on behalf of SystemUIServer, which has no network-volume permission. Saving locally and uploading avoids that.
 
 Supports macOS screenshot naming (`Screenshot ...` and `Screen Shot ...`) and GIFs from tools like [Gifox](https://gifox.app/).
 
@@ -76,10 +90,11 @@ tail -f ~/Library/Logs/screenshot-organizer.log
 
 | File | Purpose |
 |------|---------|
-| `screenshot-organizer.sh` | Core script — watches, copies to clipboard, renames, archives |
+| `screenshot-organizer.sh` | Core script — watches, copies to clipboard, renames, archives, uploads |
 | `install.sh` | Interactive setup — prompts for config, installs LaunchAgent |
 | `uninstall.sh` | Stops the agent and removes the LaunchAgent |
 | `test-organizer.sh` | Creates a test file to verify the script works |
+| `test-upload.sh` | Automated tests for the NAS upload step (temp folders only) |
 
 ## License
 

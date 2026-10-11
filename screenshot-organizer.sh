@@ -6,7 +6,7 @@ setopt NULL_GLOB
 # Ensure Homebrew binaries are in PATH (LaunchAgents have minimal PATH)
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-CONFIG_FILE="$HOME/.config/screenshot-organizer/config"
+CONFIG_FILE="${SCREENSHOT_ORGANIZER_CONFIG:-$HOME/.config/screenshot-organizer/config}"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "ERROR: Config not found at $CONFIG_FILE"
@@ -22,8 +22,15 @@ ARCHIVE_ENABLED="${ARCHIVE_ENABLED:-true}"
 RENAME_ENABLED="${RENAME_ENABLED:-true}"
 CLIPBOARD_ENABLED="${CLIPBOARD_ENABLED:-true}"
 SETTLE_DELAY="${SETTLE_DELAY:-0.5}"
+UPLOAD_DIR="${UPLOAD_DIR:-}"
+UPLOAD_INTERVAL="${UPLOAD_INTERVAL:-300}"
+STATE_DIR="${STATE_DIR:-$HOME/.local/state/screenshot-organizer}"
 
 ARCHIVE_DIR="$WATCH_DIR/_archive"
+UPLOADED_LIST="$STATE_DIR/uploaded"
+UPLOAD_LOCK="$STATE_DIR/upload.lock"
+UPLOAD_STATUS="$STATE_DIR/upload-status"
+TAB=$'\t'
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -128,6 +135,138 @@ archive_old_screenshots() {
     done
 }
 
+is_uploadable() {
+    local name="${1:t}"
+    [[ "$name" == .* ]] && return 1
+    [[ "$name" == *.(png|gif) ]] || return 1
+    # Unrenamed files are still being processed; upload them once they have their final name
+    if [[ "$RENAME_ENABLED" == true ]]; then
+        [[ "$name" =~ ^[0-9]{8}-[0-9]{6} ]] || return 1
+    fi
+    return 0
+}
+
+file_size() {
+    stat -f '%z' "$1" 2>/dev/null
+}
+
+# Prints the name the file has in UPLOAD_DIR. Never overwrites: an existing
+# file with different content pushes the upload to name-1, name-2, ...
+upload_one() {
+    local src="$1"
+    local name="${src:t}"
+    local base="${name:r}" ext="${name:e}"
+    local dest_name="$name"
+    local i=0
+
+    while [[ -e "$UPLOAD_DIR/$dest_name" ]]; do
+        if cmp -s "$src" "$UPLOAD_DIR/$dest_name"; then
+            print -r -- "$dest_name"
+            return 0
+        fi
+        ((i++))
+        dest_name="$base-$i.$ext"
+    done
+
+    local tmp="$UPLOAD_DIR/.$dest_name.partial"
+    if ! cp "$src" "$tmp" 2>/dev/null || ! cmp -s "$src" "$tmp"; then
+        rm -f "$tmp" 2>/dev/null
+        return 1
+    fi
+    touch -r "$src" "$tmp" 2>/dev/null
+
+    # -n: another Mac may have claimed the name since the check above
+    mv -n "$tmp" "$UPLOAD_DIR/$dest_name" 2>/dev/null
+    if [[ -e "$tmp" ]]; then
+        rm -f "$tmp" 2>/dev/null
+        return 1
+    fi
+    print -r -- "$dest_name"
+}
+
+recorded_dest() {
+    [[ -f "$UPLOADED_LIST" ]] || return 1
+    local line
+    line="$(grep -F -m1 -- "$1${TAB}" "$UPLOADED_LIST")" || return 1
+    [[ "${line%%${TAB}*}" == "$1" ]] || return 1
+    print -r -- "${line#*${TAB}}"
+}
+
+set_upload_status() {
+    local previous=""
+    [[ -f "$UPLOAD_STATUS" ]] && previous="$(<"$UPLOAD_STATUS")"
+    [[ "$previous" == "$1" ]] && return
+    print -r -- "$1" > "$UPLOAD_STATUS"
+    case "$1" in
+        offline) log "UPLOAD: $UPLOAD_DIR not reachable (unmounted, or /bin/zsh lacks Full Disk Access); screenshots stay local" ;;
+        online) log "UPLOAD: $UPLOAD_DIR available" ;;
+    esac
+}
+
+# Copies every renamed screenshot that isn't on UPLOAD_DIR yet, verifying each
+# copy byte for byte. Local files in _archive are deleted only after their
+# upload is verified; recent files in the watch dir stay local.
+flush_uploads() {
+    [[ -n "$UPLOAD_DIR" ]] || return 0
+    mkdir -p "$STATE_DIR"
+
+    # Never create UPLOAD_DIR: when the share is unmounted its path is missing,
+    # and creating it would write to the local disk under /Volumes.
+    if [[ ! -d "$UPLOAD_DIR" || ! -w "$UPLOAD_DIR" ]]; then
+        set_upload_status offline
+        return 0
+    fi
+    set_upload_status online
+
+    # A run that hung on a dead SMB mount must not block uploads forever
+    if [[ -d "$UPLOAD_LOCK" && -n "$(find "$UPLOAD_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]]; then
+        rm -rf "$UPLOAD_LOCK"
+    fi
+    mkdir "$UPLOAD_LOCK" 2>/dev/null || return 0
+
+    {
+        touch "$UPLOADED_LIST"
+        local f dest local_size
+        for f in "$WATCH_DIR"/*(.N) "$ARCHIVE_DIR"/*(.N); do
+            is_uploadable "$f" || continue
+
+            dest="$(recorded_dest "${f:t}")"
+            local_size="$(file_size "$f")"
+            if [[ -z "$dest" || "$(file_size "$UPLOAD_DIR/$dest")" != "$local_size" ]]; then
+                if ! dest="$(upload_one "$f")"; then
+                    log "ERROR: Failed to upload ${f:t}; will retry"
+                    continue
+                fi
+                grep -v -F -- "${f:t}${TAB}" "$UPLOADED_LIST" > "$UPLOADED_LIST.tmp"
+                print -r -- "${f:t}${TAB}$dest" >> "$UPLOADED_LIST.tmp"
+                mv "$UPLOADED_LIST.tmp" "$UPLOADED_LIST"
+                log "UPLOAD: ${f:t} -> $dest"
+            fi
+
+            if [[ "${f:h}" == "$ARCHIVE_DIR" && "$(file_size "$UPLOAD_DIR/$dest")" == "$local_size" ]]; then
+                rm -f "$f" && log "CLEANUP: ${f:t} (on $UPLOAD_DIR as $dest)"
+            fi
+        done
+
+        # Forget entries whose local file is gone, so the list stays small
+        local name kept=()
+        while IFS= read -r name; do
+            [[ -f "$WATCH_DIR/${name%%${TAB}*}" || -f "$ARCHIVE_DIR/${name%%${TAB}*}" ]] && kept+=("$name")
+        done < "$UPLOADED_LIST"
+        if (( ${#kept} )); then
+            print -rl -- "${kept[@]}" > "$UPLOADED_LIST.tmp"
+        else
+            : > "$UPLOADED_LIST.tmp"
+        fi
+        mv "$UPLOADED_LIST.tmp" "$UPLOADED_LIST"
+    } always {
+        rm -rf "$UPLOAD_LOCK"
+    }
+}
+
+# Sourced by test-upload.sh for its function definitions; only run as a script
+[[ "$ZSH_EVAL_CONTEXT" == toplevel ]] || return 0
+
 # Validate prerequisites
 if ! command -v fswatch &>/dev/null; then
     log "ERROR: fswatch not found. Install with: brew install fswatch"
@@ -145,6 +284,15 @@ VERSION="$(cat "$SCRIPT_DIR/VERSION" 2>/dev/null || echo "unknown")"
 log "Screenshot Organizer v$VERSION"
 log "Watching $WATCH_DIR for screenshots..."
 
+if [[ -n "$UPLOAD_DIR" ]]; then
+    log "Uploading to $UPLOAD_DIR (retry every ${UPLOAD_INTERVAL}s)"
+    # Catches up the backlog after time away from the network
+    while true; do
+        flush_uploads
+        sleep "$UPLOAD_INTERVAL"
+    done &!
+fi
+
 fswatch --event Created --event Updated --event Renamed -0 "$WATCH_DIR" | while IFS= read -r -d '' file; do
     # Skip dotfiles (macOS writes screenshots to a temp dotfile first, then renames)
     [[ "${file:t}" == .* ]] && continue
@@ -154,5 +302,7 @@ fswatch --event Created --event Updated --event Renamed -0 "$WATCH_DIR" | while 
     if [[ "${file:t}" == (*"Screen Shot"*|*"Screenshot"*).png || "${file:t}" == *.gif ]]; then
         process_screenshot "$file"
         [[ "$ARCHIVE_ENABLED" == true ]] && archive_old_screenshots
+        # Background: a slow or hung network mount must not delay the next screenshot
+        flush_uploads &!
     fi
 done

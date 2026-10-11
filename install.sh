@@ -76,6 +76,20 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
         mkdir -p "$watch_dir/_archive"
     fi
 
+    # Upload to a network folder
+    default_upload_dir=""
+    [[ -f "$CONFIG_FILE" ]] && default_upload_dir="$(source "$CONFIG_FILE"; print -r -- "$UPLOAD_DIR")"
+    echo ""
+    echo "Upload screenshots to a folder on a NAS or network share?"
+    echo "  Screenshots save locally first and upload whenever the folder is reachable."
+    printf "  Folder path (blank = don't upload) [%s]: " "$default_upload_dir"
+    read -r upload_dir
+    upload_dir="${upload_dir:-$default_upload_dir}"
+    upload_dir="${upload_dir/#\~/$HOME}"
+    if [[ -n "$upload_dir" && ! -d "$upload_dir" ]]; then
+        echo "  Note: $upload_dir isn't reachable right now. Uploads start once it is."
+    fi
+
     # Screenshot thumbnail
     echo ""
     echo "macOS shows a thumbnail preview after taking a screenshot."
@@ -102,6 +116,7 @@ CLIPBOARD_ENABLED=$clipboard_enabled
 ARCHIVE_ENABLED=$archive_enabled
 KEEP_COUNT=$keep_count
 SETTLE_DELAY=0.5
+UPLOAD_DIR="$upload_dir"
 EOF
 
     echo ""
@@ -128,6 +143,7 @@ cat > "$PLIST_DST" <<EOF
     <string>$LABEL</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/zsh</string>
         <string>$SCRIPT_DIR/screenshot-organizer.sh</string>
     </array>
     <key>KeepAlive</key>
@@ -153,3 +169,13 @@ launchctl bootstrap "$DOMAIN_TARGET" "$PLIST_DST"
 echo "Agent loaded. Screenshot organizer v$VERSION is running."
 echo ""
 echo "Logs: tail -f ~/Library/Logs/screenshot-organizer.log"
+
+upload_dir_configured="$(source "$CONFIG_FILE"; print -r -- "$UPLOAD_DIR")"
+if [[ -n "$upload_dir_configured" ]]; then
+    echo ""
+    echo "Uploading to a network folder needs one macOS permission. macOS silently"
+    echo "blocks background jobs from network volumes unless the shell has it:"
+    echo "  System Settings → Privacy & Security → Full Disk Access → +"
+    echo "  then ⇧⌘G, enter /bin/zsh, add it and turn it on."
+    echo "Check it worked: the log should show 'UPLOAD:' lines after your next screenshot."
+fi
