@@ -217,6 +217,14 @@ upload_dir_mounted() {
     [[ "$root_dev" != "$volumes_dev" ]]
 }
 
+# launchd runs one instance, so at startup any lock is left by a run killed
+# mid-upload (logout, reboot, bootout). Forgetting the status makes the first
+# run log whether UPLOAD_DIR is reachable.
+reset_upload_state() {
+    rm -rf "$UPLOAD_LOCK"
+    rm -f "$UPLOAD_STATUS"
+}
+
 paths_overlap() {
     [[ "$1" == "$2" || "$1" == "$2"/* || "$2" == "$1"/* ]]
 }
@@ -326,6 +334,7 @@ log "Watching $WATCH_DIR for screenshots..."
 
 if [[ -n "$UPLOAD_DIR" ]]; then
     log "Uploading to $UPLOAD_DIR (retry every ${UPLOAD_INTERVAL}s)"
+    reset_upload_state
     # Catches up the backlog after time away from the network
     while true; do
         flush_uploads

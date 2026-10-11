@@ -186,6 +186,17 @@ check "nothing copied to the share root" '[[ ! -e $ROOT/nas/20261009-150000.png 
 check "overlap logged" 'grep -q "overlaps" $ROOT/log'
 teardown
 
+# ---- startup clears a lock left by a killed run ----
+setup
+print -r "png-m" > "$ROOT/watch/20261010-230840.png"
+mkdir "$ROOT/state/upload.lock"
+print -r "online" > "$ROOT/state/upload-status"
+reset_upload_state
+run_flush
+check "fresh lock from a killed run cleared at startup" '[[ -f $ROOT/nas/20261010-230840.png && ! -e $ROOT/state/upload.lock ]]'
+check "first run after startup logs reachability" 'grep -q "available" $ROOT/log'
+teardown
+
 # ---- held lock: run skips, nothing deleted ----
 setup
 print -r "png-e" > "$ROOT/watch/_archive/20261005-120000.png"
