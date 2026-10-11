@@ -172,8 +172,10 @@ upload_one() {
     sub="$(upload_subdir "$src")" || return 1
     dest_name="$sub/$name"
 
-    # Only folders below UPLOAD_DIR are created, never UPLOAD_DIR itself
-    mkdir -p "$UPLOAD_DIR/$sub" 2>/dev/null || return 1
+    # One level at a time, no -p: if the share vanished mid-run, UPLOAD_DIR is
+    # missing and this must fail instead of rebuilding it on the local disk
+    [[ -d "$UPLOAD_DIR/${sub%%/*}" ]] || mkdir "$UPLOAD_DIR/${sub%%/*}" 2>/dev/null
+    [[ -d "$UPLOAD_DIR/$sub" ]] || mkdir "$UPLOAD_DIR/$sub" 2>/dev/null || return 1
 
     while [[ -e "$UPLOAD_DIR/$dest_name" ]]; do
         if cmp -s "$src" "$UPLOAD_DIR/$dest_name"; then

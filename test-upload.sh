@@ -218,6 +218,17 @@ check "filed under 2025/03" '[[ "$(<$ROOT/nas/2025/03/20250315-080000.png)" == p
 check "recorded with its folder" 'grep -q "^20250315-080000.png${TAB}2025/03/20250315-080000.png$" $ROOT/state/uploaded'
 teardown
 
+# ---- share vanishes after the probe: nothing rebuilt locally, nothing deleted ----
+setup
+print -r "png-r" > "$ROOT/watch/_archive/20261011-090000.png"
+functions[real_upload_dir_writable]=$functions[upload_dir_writable]
+upload_dir_writable() { [[ -e "$ROOT/gone" ]] || { touch "$ROOT/gone"; rmdir "$ROOT/nas" } ; return 0 }
+run_flush
+functions[upload_dir_writable]=$functions[real_upload_dir_writable]
+check "upload dir not rebuilt on the local disk" '[[ ! -e $ROOT/nas ]]'
+check "archive file kept when the share vanished" '[[ -f $ROOT/watch/_archive/20261011-090000.png ]]'
+teardown
+
 # ---- renaming off: year/month comes from the modified date ----
 setup
 RENAME_ENABLED=false
