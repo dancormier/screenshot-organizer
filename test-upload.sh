@@ -110,12 +110,13 @@ run_flush
 check "unrenamed screenshot not uploaded" '[[ -z "$(ls -A $ROOT/nas)" ]]'
 teardown
 
-# ---- write failure: local file kept, retried later ----
+# ---- read-only share counts as offline: local file kept, retried later ----
 setup
 print -r "png-d" > "$ROOT/watch/_archive/20261004-120000.png"
 chmod a-w "$ROOT/nas"
 run_flush
 check "local kept when NAS is read-only" '[[ -f $ROOT/watch/_archive/20261004-120000.png ]]'
+check "read-only share logged as not reachable" 'grep -q "not reachable" $ROOT/log'
 chmod u+w "$ROOT/nas"
 run_flush
 check "uploaded once writable again" '[[ -f $ROOT/nas/20261004-120000.png ]]'
@@ -142,6 +143,35 @@ check "local kept when the copy is corrupted" '[[ -f $ROOT/watch/_archive/202610
 check "corrupted copy not published" '[[ -z "$(ls -A $ROOT/nas)" ]]'
 run_flush
 check "clean retry uploads it" '[[ "$(<$ROOT/nas/20261008-120001.png)" == png-i ]]'
+teardown
+
+# ---- recorded upload replaced by same-size different content: never delete ----
+setup
+print -r "mine" > "$ROOT/watch/_archive/20261009-120000.png"
+print -r "evil" > "$ROOT/nas/20261009-120000.png"
+print -r "20261009-120000.png${TAB}20261009-120000.png" > "$ROOT/state/uploaded"
+run_flush
+check "share copy with other content left untouched" '[[ "$(<$ROOT/nas/20261009-120000.png)" == evil ]]'
+check "own content re-uploaded under -1" '[[ "$(<$ROOT/nas/20261009-120000-1.png)" == mine ]]'
+check "local removed only after its own content is on the share" '[[ ! -e $ROOT/watch/_archive/20261009-120000.png ]]'
+teardown
+
+# ---- temp name differs between processes ----
+setup
+print -r "png-j" > "$ROOT/watch/20261009-130000.png"
+cp() { print -r -- "${@[-1]}" > "$ROOT/tmpname"; return 1 }
+run_flush
+unfunction cp
+check "temp file name carries host and pid" '[[ "$(<$ROOT/tmpname)" == *".${HOST%%.*}."<->".partial" ]]'
+teardown
+
+# ---- lock taken over mid-run by another run is not removed ----
+setup
+print -r "png-k" > "$ROOT/watch/20261009-140000.png"
+cp() { print -r "otherhost.1" > "$ROOT/state/upload.lock/owner"; command cp "$@" }
+run_flush
+unfunction cp
+check "foreign lock left in place" '[[ "$(<$ROOT/state/upload.lock/owner)" == otherhost.1 ]]'
 teardown
 
 # ---- held lock: run skips, nothing deleted ----

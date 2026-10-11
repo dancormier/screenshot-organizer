@@ -110,13 +110,13 @@ if [[ ! -f "$CONFIG_FILE" || "$1" == "--reconfigure" ]]; then
     # Save config
     mkdir -p "$CONFIG_DIR"
     cat > "$CONFIG_FILE" <<EOF
-WATCH_DIR="$watch_dir"
+WATCH_DIR=${(qq)watch_dir}
 RENAME_ENABLED=$rename_enabled
 CLIPBOARD_ENABLED=$clipboard_enabled
 ARCHIVE_ENABLED=$archive_enabled
 KEEP_COUNT=$keep_count
 SETTLE_DELAY=0.5
-UPLOAD_DIR="$upload_dir"
+UPLOAD_DIR=${(qq)upload_dir}
 EOF
 
     echo ""

@@ -31,6 +31,7 @@ UPLOADED_LIST="$STATE_DIR/uploaded"
 UPLOAD_LOCK="$STATE_DIR/upload.lock"
 UPLOAD_STATUS="$STATE_DIR/upload-status"
 TAB=$'\t'
+zmodload zsh/system
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -168,7 +169,8 @@ upload_one() {
         dest_name="$base-$i.$ext"
     done
 
-    local tmp="$UPLOAD_DIR/.$dest_name.partial"
+    # Unique per Mac and process, so two uploaders never share a temp file
+    local tmp="$UPLOAD_DIR/.$dest_name.${HOST%%.*}.$sysparams[pid].partial"
     if ! cp "$src" "$tmp" 2>/dev/null || ! cmp -s "$src" "$tmp"; then
         rm -f "$tmp" 2>/dev/null
         return 1
@@ -203,64 +205,86 @@ set_upload_status() {
     esac
 }
 
+# True only when UPLOAD_DIR is on a mounted volume. A leftover folder under
+# /Volumes after an unmount would otherwise take uploads onto the boot disk.
+upload_dir_mounted() {
+    [[ "$UPLOAD_DIR" == /Volumes/* ]] || return 0
+    local mount_root="/Volumes/${${UPLOAD_DIR#/Volumes/}%%/*}"
+    local root_dev volumes_dev
+    root_dev="$(stat -f '%d' "$mount_root" 2>/dev/null)" || return 1
+    volumes_dev="$(stat -f '%d' /Volumes 2>/dev/null)" || return 1
+    [[ "$root_dev" != "$volumes_dev" ]]
+}
+
+record_upload() {
+    local tmp
+    tmp="$(mktemp "$STATE_DIR/uploaded.XXXXXX")" || return 1
+    grep -v -F -- "$1${TAB}" "$UPLOADED_LIST" > "$tmp"
+    print -r -- "$1${TAB}$2" >> "$tmp"
+    mv "$tmp" "$UPLOADED_LIST"
+}
+
 # Copies every renamed screenshot that isn't on UPLOAD_DIR yet, verifying each
-# copy byte for byte. Local files in _archive are deleted only after their
-# upload is verified; recent files in the watch dir stay local.
+# copy byte for byte. Local files in _archive are deleted only after the copy
+# on UPLOAD_DIR matches byte for byte; recent files in the watch dir stay local.
 flush_uploads() {
     [[ -n "$UPLOAD_DIR" ]] || return 0
     mkdir -p "$STATE_DIR"
 
-    # Never create UPLOAD_DIR: when the share is unmounted its path is missing,
-    # and creating it would write to the local disk under /Volumes.
-    if [[ ! -d "$UPLOAD_DIR" || ! -w "$UPLOAD_DIR" ]]; then
-        set_upload_status offline
-        return 0
-    fi
-    set_upload_status online
-
-    # A run that hung on a dead SMB mount must not block uploads forever
+    # Taken before touching UPLOAD_DIR, so a dead SMB mount hangs one run, not
+    # one per screenshot. The lock is touched per file; an hour without a touch
+    # means its run is stuck.
     if [[ -d "$UPLOAD_LOCK" && -n "$(find "$UPLOAD_LOCK" -maxdepth 0 -mmin +60 2>/dev/null)" ]]; then
         rm -rf "$UPLOAD_LOCK"
     fi
     mkdir "$UPLOAD_LOCK" 2>/dev/null || return 0
+    local owner="${HOST%%.*}.$sysparams[pid]"
+    print -r -- "$owner" > "$UPLOAD_LOCK/owner"
 
     {
+        # Never create UPLOAD_DIR: when the share is unmounted its path is
+        # missing, and creating it would write to the local disk under /Volumes.
+        if [[ ! -d "$UPLOAD_DIR" || ! -w "$UPLOAD_DIR" ]] || ! upload_dir_mounted; then
+            set_upload_status offline
+            return 0
+        fi
+        set_upload_status online
+
         touch "$UPLOADED_LIST"
-        local f dest local_size
+        local f dest local_size archived
         for f in "$WATCH_DIR"/*(.N) "$ARCHIVE_DIR"/*(.N); do
             is_uploadable "$f" || continue
+            touch "$UPLOAD_LOCK"
+            [[ "${f:h}" == "$ARCHIVE_DIR" ]] && archived=true || archived=false
 
             dest="$(recorded_dest "${f:t}")"
             local_size="$(file_size "$f")"
-            if [[ -z "$dest" || "$(file_size "$UPLOAD_DIR/$dest")" != "$local_size" ]]; then
+            if [[ -z "$dest" || "$(file_size "$UPLOAD_DIR/$dest")" != "$local_size" ]] ||
+               { $archived && ! cmp -s "$f" "$UPLOAD_DIR/$dest"; }; then
                 if ! dest="$(upload_one "$f")"; then
                     log "ERROR: Failed to upload ${f:t}; will retry"
                     continue
                 fi
-                grep -v -F -- "${f:t}${TAB}" "$UPLOADED_LIST" > "$UPLOADED_LIST.tmp"
-                print -r -- "${f:t}${TAB}$dest" >> "$UPLOADED_LIST.tmp"
-                mv "$UPLOADED_LIST.tmp" "$UPLOADED_LIST"
+                record_upload "${f:t}" "$dest"
                 log "UPLOAD: ${f:t} -> $dest"
             fi
 
-            if [[ "${f:h}" == "$ARCHIVE_DIR" && "$(file_size "$UPLOAD_DIR/$dest")" == "$local_size" ]]; then
+            if $archived && cmp -s "$f" "$UPLOAD_DIR/$dest"; then
                 rm -f "$f" && log "CLEANUP: ${f:t} (on $UPLOAD_DIR as $dest)"
             fi
         done
 
         # Forget entries whose local file is gone, so the list stays small
-        local name kept=()
+        local name tmp kept=()
         while IFS= read -r name; do
             [[ -f "$WATCH_DIR/${name%%${TAB}*}" || -f "$ARCHIVE_DIR/${name%%${TAB}*}" ]] && kept+=("$name")
         done < "$UPLOADED_LIST"
-        if (( ${#kept} )); then
-            print -rl -- "${kept[@]}" > "$UPLOADED_LIST.tmp"
-        else
-            : > "$UPLOADED_LIST.tmp"
-        fi
-        mv "$UPLOADED_LIST.tmp" "$UPLOADED_LIST"
+        tmp="$(mktemp "$STATE_DIR/uploaded.XXXXXX")" || return 0
+        (( ${#kept} )) && print -rl -- "${kept[@]}" > "$tmp"
+        mv "$tmp" "$UPLOADED_LIST"
     } always {
-        rm -rf "$UPLOAD_LOCK"
+        # A run whose stale lock was cleared must not remove its successor's
+        [[ "$(<"$UPLOAD_LOCK/owner" 2>/dev/null)" == "$owner" ]] && rm -rf "$UPLOAD_LOCK"
     }
 }
 
